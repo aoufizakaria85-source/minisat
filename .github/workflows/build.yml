@@ -1,5 +1,5 @@
 
-name: Build MiniSat
+name: Build MiniSat for Windows
 
 on:
   push:
@@ -10,33 +10,56 @@ permissions:
   contents: read
 
 jobs:
-  build:
-    name: Build on Ubuntu
-    runs-on: ubuntu-24.04
+  build-windows:
+    runs-on: windows-latest
+
+    defaults:
+      run:
+        shell: msys2 {0}
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Install build dependencies
+      - name: Install Windows build tools
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-gcc
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-zlib
+
+      - name: Update legacy CMake requirement
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential zlib1g-dev
+          sed -i \
+            's/cmake_minimum_required(VERSION 2\.6 FATAL_ERROR)/cmake_minimum_required(VERSION 3.10 FATAL_ERROR)/' \
+            CMakeLists.txt
 
-      - name: Build MiniSat
+      - name: Configure Windows build
         run: |
-          make -j2 r cr
+          cmake -S . -B build-win -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_EXE_LINKER_FLAGS="-static" \
+            -DZLIB_USE_STATIC_LIBS=ON \
+            -DSTATIC_BINARIES=ON
 
-      - name: Verify executables
+      - name: Compile MiniSat
         run: |
-          test -x build/release/bin/minisat
-          test -x build/release/bin/minisat_core
+          cmake --build build-win --parallel 2
 
-          build/release/bin/minisat -h || true
-          build/release/bin/minisat_core -h || true
+      - name: Verify Windows executables
+        run: |
+          test -f build-win/minisat.exe
+          test -f build-win/minisat_core.exe
 
-      - name: Test SAT and UNSAT instances
-        shell: bash
+          file build-win/minisat.exe
+          file build-win/minisat_core.exe
+
+      - name: Test SAT and UNSAT
+        shell: msys2 {0}
         run: |
           set -euo pipefail
 
@@ -55,11 +78,11 @@ jobs:
           EOF
 
           set +e
-          build/release/bin/minisat \
+          ./build-win/minisat.exe \
             test-cases/sat.cnf test-cases/sat.out
           sat_rc=$?
 
-          build/release/bin/minisat \
+          ./build-win/minisat.exe \
             test-cases/unsat.cnf test-cases/unsat.out
           unsat_rc=$?
           set -e
@@ -70,16 +93,16 @@ jobs:
           echo "SAT exit code: $sat_rc"
           echo "UNSAT exit code: $unsat_rc"
 
-      - name: Prepare binary artifacts
+      - name: Stage Windows binaries
         run: |
           mkdir -p artifacts
-          cp build/release/bin/minisat artifacts/
-          cp build/release/bin/minisat_core artifacts/
+          cp build-win/minisat.exe artifacts/
+          cp build-win/minisat_core.exe artifacts/
 
-      - name: Upload executables
+      - name: Upload Windows executables
         uses: actions/upload-artifact@v4
         with:
-          name: minisat-ubuntu-24.04-x86_64
+          name: minisat-windows-x64
           path: artifacts/
           if-no-files-found: error
           retention-days: 30
