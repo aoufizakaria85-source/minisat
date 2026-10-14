@@ -1,37 +1,85 @@
-name: Build Windows Executable
 
-on: [push, workflow_dispatch]
+name: Build MiniSat
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
-    runs-on: windows-latest
+    name: Build on Ubuntu
+    runs-on: ubuntu-24.04
 
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@v4
 
-    - name: Patch CMakeLists for modern CMake
-      shell: pwsh
-      run: |
-        $path = "CMakeLists.txt"
-        $text = Get-Content $path -Raw
-        $text = [System.Text.RegularExpressions.Regex]::Replace($text, 'cmake_minimum_required\s*\([^\)]+\)', 'cmake_minimum_required(VERSION 3.10)')
-        Set-Content $path $text -NoNewline
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential zlib1g-dev
 
-    - name: Install Zlib via vcpkg
-      run: vcpkg install zlib
+      - name: Build MiniSat
+        run: |
+          make -j2 r cr
 
-    - name: Configure CMake with vcpkg toolchain
-      run: cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE="${{ env.VCPKG_INSTALLATION_ROOT }}/scripts/buildsystems/vcpkg.cmake"
+      - name: Verify executables
+        run: |
+          test -x build/release/bin/minisat
+          test -x build/release/bin/minisat_core
 
-    - name: Build Minisat
-      run: cmake --build build --config Release
+          build/release/bin/minisat -h || true
+          build/release/bin/minisat_core -h || true
 
-    - name: Upload Executable
-      uses: actions/upload-artifact@v4
-      with:
-        name: minisat-windows
-        path: |
-          build/Release/minisat.exe
-          build/minisat.exe
-        if-no-files-found: error
+      - name: Test SAT and UNSAT instances
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          mkdir -p test-cases
+
+          cat > test-cases/sat.cnf <<'EOF'
+          p cnf 2 2
+          1 2 0
+          -1 2 0
+          EOF
+
+          cat > test-cases/unsat.cnf <<'EOF'
+          p cnf 1 2
+          1 0
+          -1 0
+          EOF
+
+          set +e
+          build/release/bin/minisat \
+            test-cases/sat.cnf test-cases/sat.out
+          sat_rc=$?
+
+          build/release/bin/minisat \
+            test-cases/unsat.cnf test-cases/unsat.out
+          unsat_rc=$?
+          set -e
+
+          grep -qx 'SATISFIABLE' test-cases/sat.out
+          grep -qx 'UNSATISFIABLE' test-cases/unsat.out
+
+          echo "SAT exit code: $sat_rc"
+          echo "UNSAT exit code: $unsat_rc"
+
+      - name: Prepare binary artifacts
+        run: |
+          mkdir -p artifacts
+          cp build/release/bin/minisat artifacts/
+          cp build/release/bin/minisat_core artifacts/
+
+      - name: Upload executables
+        uses: actions/upload-artifact@v4
+        with:
+          name: minisat-ubuntu-24.04-x86_64
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 30
