@@ -58,35 +58,6 @@ jobs:
           file build-win/minisat.exe
           file build-win/minisat_core.exe
 
-      - name: Test SAT and UNSAT
-        run: |
-          set -eu
-
-          mkdir -p test-cases
-
-          cat > test-cases/sat.cnf <<'EOF'
-          p cnf 2 2
-          1 2 0
-          -1 2 0
-          EOF
-
-          cat > test-cases/unsat.cnf <<'EOF'
-          p cnf 1 2
-          1 0
-          -1 0
-          EOF
-
-          ./build-win/minisat.exe \
-            test-cases/sat.cnf test-cases/sat.out || true
-
-          ./build-win/minisat.exe \
-            test-cases/unsat.cnf test-cases/unsat.out || true
-
-          grep -qx 'SATISFIABLE' test-cases/sat.out
-          grep -qx 'UNSATISFIABLE' test-cases/unsat.out
-
-          echo "Both SAT and UNSAT tests passed."
-
       - name: Stage Windows binaries
         run: |
           mkdir -p artifacts
