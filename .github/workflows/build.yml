@@ -10,8 +10,17 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v4
 
+    - name: Patch CMakeLists for modern CMake
+      shell: pwsh
+      run: |
+        $path = "CMakeLists.txt"
+        $text = Get-Content $path -Raw
+        # Update old cmake_minimum_required to version 3.5
+        $text = [System.Text.RegularExpressions.Regex]::Replace($text, 'cmake_minimum_required\s*\([^\)]+\)', 'cmake_minimum_required(VERSION 3.5)')
+        Set-Content $path $text -NoNewline
+
     - name: Configure CMake
-      run: cmake -S . -B build -DCMAKE_POLICY_DEFAULT_CMP0000=OLD
+      run: cmake -S . -B build
 
     - name: Build Minisat
       run: cmake --build build --config Release
@@ -20,5 +29,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: minisat-windows
-        path: build/minisat.exe
-        if-no-files-found: ignore
+        path: |
+          build/Release/minisat.exe
+          build/minisat.exe
+        if-no-files-found: error
