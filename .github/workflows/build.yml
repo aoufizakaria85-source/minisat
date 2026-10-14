@@ -58,8 +58,7 @@ jobs:
           file build-win/minisat.exe
           file build-win/minisat_core.exe
 
-            - name: Test SAT and UNSAT
-        shell: msys2 {0}
+      - name: Test SAT and UNSAT
         run: |
           set -eu
 
