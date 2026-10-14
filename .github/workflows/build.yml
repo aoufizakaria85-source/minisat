@@ -58,10 +58,10 @@ jobs:
           file build-win/minisat.exe
           file build-win/minisat_core.exe
 
-      - name: Test SAT and UNSAT
+            - name: Test SAT and UNSAT
         shell: msys2 {0}
         run: |
-          set -euo pipefail
+          set -eu
 
           mkdir -p test-cases
 
@@ -77,21 +77,16 @@ jobs:
           -1 0
           EOF
 
-          set +e
           ./build-win/minisat.exe \
-            test-cases/sat.cnf test-cases/sat.out
-          sat_rc=$?
+            test-cases/sat.cnf test-cases/sat.out || true
 
           ./build-win/minisat.exe \
-            test-cases/unsat.cnf test-cases/unsat.out
-          unsat_rc=$?
-          set -e
+            test-cases/unsat.cnf test-cases/unsat.out || true
 
           grep -qx 'SATISFIABLE' test-cases/sat.out
           grep -qx 'UNSATISFIABLE' test-cases/unsat.out
 
-          echo "SAT exit code: $sat_rc"
-          echo "UNSAT exit code: $unsat_rc"
+          echo "Both SAT and UNSAT tests passed."
 
       - name: Stage Windows binaries
         run: |
