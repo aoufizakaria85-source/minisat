@@ -10,21 +10,19 @@ jobs:
     - name: Checkout Repository
       uses: actions/checkout@v4
 
-    - name: Patch CMakeLists for Windows & Zlib
+    - name: Patch CMakeLists for modern CMake
       shell: pwsh
       run: |
         $path = "CMakeLists.txt"
         $text = Get-Content $path -Raw
-        
-        # 1. Update version requirement
         $text = [System.Text.RegularExpressions.Regex]::Replace($text, 'cmake_minimum_required\s*\([^\)]+\)', 'cmake_minimum_required(VERSION 3.10)')
-        
-        # 2. Disable or remove Zlib dependency requirement if present, or we can pass a flag
-        # Let's write out the patched file
         Set-Content $path $text -NoNewline
 
-    - name: Configure CMake (Without Zlib)
-      run: cmake -S . -B build -DMINISAT_USE_ZLIB=OFF
+    - name: Install Zlib via vcpkg
+      run: vcpkg install zlib
+
+    - name: Configure CMake with vcpkg toolchain
+      run: cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLROOT/scripts/buildsystems/vcpkg.cmake"
 
     - name: Build Minisat
       run: cmake --build build --config Release
